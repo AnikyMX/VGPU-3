@@ -1,0 +1,36 @@
+name: Build VGPU Legacy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Android NDK (Legacy r21e)
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r21e
+        # Kita pakai r21e karena ini versi terakhir yang 'sopan' 
+        # terhadap kode C style lama tapi tetap jalan di server modern.
+
+      - name: Build with ndk-build
+        run: |
+          echo "Mulai Building..."
+          ${{ steps.setup-ndk.outputs.ndk-path }}/ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=Android.mk APP_ABI=all
+
+      - name: Cek Hasil Output
+        run: ls -R libs/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: VGPU-Compiled-Libs
+          path: libs/**/*.so
