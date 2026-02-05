@@ -31,23 +31,20 @@ jobs:
 
     - name: Build Native Library (VGPU)
       run: |
-        echo "Starting VGPU Build with NDK r27c & LTO..."
+        echo "Starting VGPU Build (Silent Mode)..."
         
-        # Bersihkan build sebelumnya
         ${{ steps.setup-ndk.outputs.ndk-path }}/ndk-build clean NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=Android.mk
 
-        # BUILD COMMAND
-        # Penjelasan Flag Keras:
-        # -flto=thin     : Versi LTO yang lebih cepat dan stabil untuk Android modern.
-        # -fuse-ld=lld   : WAJIB ADA jika pakai LTO! Memaksa pakai linker LLVM (lld).
-        # -Wno-error     : Jangan stop build cuma gara-gara warning (kode tua banyak warningnya).
-        
+        # UPDATE:
+        # -w (huruf kecil) : Matikan SEMUA warning. Log jadi bersih.
+        # Sisanya flag optimasi & bypass error tetap dipertahankan.
+
         ${{ steps.setup-ndk.outputs.ndk-path }}/ndk-build \
           NDK_PROJECT_PATH=. \
           APP_BUILD_SCRIPT=Android.mk \
           APP_ABI=arm64-v8a \
-          APP_CFLAGS="-std=gnu99 -Ofast -flto -march=armv8-a+simd -mtune=cortex-a53 -ftree-vectorize -ffast-math -funroll-loops -fomit-frame-pointer -fno-math-errno -Wno-error -Wno-implicit-function-declaration -Wno-error=implicit-function-declaration -Wno-incompatible-function-pointer-types" \
-          APP_LDFLAGS="-flto -fuse-ld=lld -Wl,--gc-sections"
+          APP_CFLAGS="-w -std=gnu99 -Ofast -flto -march=armv8-a+simd -mtune=cortex-a53 -ftree-vectorize -ffast-math -funroll-loops -fomit-frame-pointer -fno-math-errno -Wno-error -Wno-implicit-function-declaration -Wno-error=implicit-function-declaration -Wno-incompatible-function-pointer-types" \
+          APP_LDFLAGS="-flto=thin -fuse-ld=lld -Wl,--gc-sections"
 
     - name: Inject Library & Create APK
       run: |
