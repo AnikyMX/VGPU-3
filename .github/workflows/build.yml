@@ -40,9 +40,8 @@ jobs:
           APP_CFLAGS="-Ofast -ftree-vectorize -ffast-math -funroll-loops -fomit-frame-pointer -fno-math-errno" \
           APP_LDFLAGS="-Wl,--gc-sections"
 
-        - name: Inject Library & Create APK
+    - name: Inject Library & Create APK
       run: |
-        # Cek ketersediaan bahan baku APK
         if [ ! -d "base_apk" ]; then
           echo "FATAL ERROR: Folder 'base_apk' tidak ditemukan di repo!"
           exit 1
