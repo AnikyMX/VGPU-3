@@ -40,12 +40,11 @@ jobs:
           APP_CFLAGS="-Ofast -ftree-vectorize -ffast-math -funroll-loops -fomit-frame-pointer -fno-math-errno" \
           APP_LDFLAGS="-Wl,--gc-sections"
 
-    - name: Inject Library & Create APK
+        - name: Inject Library & Create APK
       run: |
         # Cek ketersediaan bahan baku APK
         if [ ! -d "base_apk" ]; then
           echo "FATAL ERROR: Folder 'base_apk' tidak ditemukan di repo!"
-          echo "Kamu wajib upload folder hasil ekstrak APK target ke repo dulu."
           exit 1
         fi
 
@@ -56,22 +55,23 @@ jobs:
         cp -r base_apk/* output_apk/
         mkdir -p output_apk/lib/arm64-v8a
 
-        # Logika Pencarian Library VGPU
-        # VGPU output defaultnya ada di folder libs/arm64-v8a/
-        if [ -f libs/arm64-v8a/libVGPU.so ]; then
+        # PERBAIKAN DISINI: Cek nama file lowercase (libvgpu.so)
+        if [ -f libs/arm64-v8a/libvgpu.so ]; then
+             echo "Found libvgpu.so, injecting..."
+             cp libs/arm64-v8a/libvgpu.so output_apk/lib/arm64-v8a/libgl4es_3.so
+             
+        elif [ -f libs/arm64-v8a/libVGPU.so ]; then
              echo "Found libVGPU.so, injecting..."
-             # Disini kita rename jadi libgl4es_3.so (atau nama lain sesuai target inject kamu)
-             # Ubah nama tujuan di bawah ini jika perlu
              cp libs/arm64-v8a/libVGPU.so output_apk/lib/arm64-v8a/libgl4es_3.so
              
-             # Opsional: Jika kamu ingin namanya tetap libVGPU.so, ganti baris atas.
         else
-             echo "Build failed! Library VGPU tidak ditemukan."
+             echo "Build failed! Library tidak ditemukan."
+             echo "Isi folder libs/arm64-v8a:"
              ls -R libs/
              exit 1
         fi
 
-        # Bersihkan sisa keystore lama jika ada di base
+        # Bersihkan sisa keystore lama jika ada
         rm -f output_apk/*.keystore
 
         # Zip kembali menjadi APK
