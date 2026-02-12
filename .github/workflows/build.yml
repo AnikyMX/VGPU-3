@@ -1,14 +1,15 @@
-name: Build VGPU (Modern NDK r27c + LTO)
+name: Build VGPU (APK)
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
 
 jobs:
   build-and-repack:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
@@ -22,34 +23,37 @@ jobs:
     - name: Setup Android SDK Tools
       uses: android-actions/setup-android@v3
 
-    # UPGRADE: Menggunakan NDK r27c (Bleeding Edge)
     - name: Setup Android NDK
       uses: nttld/setup-ndk@v1
       id: setup-ndk
       with:
         ndk-version: r27c
 
-    - name: Build Native Library (VGPU)
+    - name: Build Native Library (Ninja)
       run: |
-        echo "Starting VGPU Build (Silent Mode)..."
-        
-        ${{ steps.setup-ndk.outputs.ndk-path }}/ndk-build clean NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=Android.mk
+        sudo apt-get update && sudo apt-get install -y ninja-build
 
-        # UPDATE:
-        # -w (huruf kecil) : Matikan SEMUA warning. Log jadi bersih.
-        # Sisanya flag optimasi & bypass error tetap dipertahankan.
+        export ANDROID_NDK_HOME=${{ steps.setup-ndk.outputs.ndk-path }}
+        mkdir build
+        cd build
 
-        ${{ steps.setup-ndk.outputs.ndk-path }}/ndk-build \
-          NDK_PROJECT_PATH=. \
-          APP_BUILD_SCRIPT=Android.mk \
-          APP_ABI=arm64-v8a \
-          APP_CFLAGS="-w -std=gnu99 -Ofast -flto -march=armv8-a+simd -mtune=cortex-a53 -ftree-vectorize -ffast-math -funroll-loops -fomit-frame-pointer -fno-math-errno -Wno-error -Wno-implicit-function-declaration -Wno-error=implicit-function-declaration -Wno-incompatible-function-pointer-types" \
-          APP_LDFLAGS="-flto=thin -fuse-ld=lld -Wl,--gc-sections"
+        cmake .. \
+          -Wno-dev \
+          -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-24 \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DANDROID=ON \
+          -DNO_GBM=ON \
+          -G "Ninja" \
+          -DCMAKE_C_FLAGS="-w -std=gnu99 -Ofast -march=armv8-a+simd -mtune=cortex-a53 -ftree-vectorize -ffast-math -funroll-loops -fomit-frame-pointer -flto -fno-math-errno -Wno-error -Wno-implicit-function-declaration" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-flto -fuse-ld=lld -Wl,--gc-sections"
+        ninja
 
     - name: Inject Library & Create APK
       run: |
         if [ ! -d "base_apk" ]; then
-          echo "FATAL ERROR: Folder 'base_apk' tidak ditemukan!"
+          echo "FATAL ERROR: Folder 'base_apk' not found!"
           exit 1
         fi
 
@@ -58,22 +62,17 @@ jobs:
         cp -r base_apk/* output_apk/
         mkdir -p output_apk/lib/arm64-v8a
 
-        # Deteksi Library (Lowercase vs Uppercase)
-        if [ -f libs/arm64-v8a/libvgpu.so ]; then
+        if [ -f build/libvgpu.so ]; then
              echo "Found libvgpu.so, injecting..."
-             cp libs/arm64-v8a/libvgpu.so output_apk/lib/arm64-v8a/libgl4es_3.so
-             
-        elif [ -f libs/arm64-v8a/libVGPU.so ]; then
-             echo "Found libVGPU.so, injecting..."
-             cp libs/arm64-v8a/libVGPU.so output_apk/lib/arm64-v8a/libgl4es_3.so
-             
+             cp build/libvgpu.so output_apk/lib/arm64-v8a/libgl4es_3.so
         else
-             echo "Build failed! Library tidak ditemukan."
-             ls -R libs/
+             echo "Build failed! Library libvgpu.so not found in build directory."
+             ls -R build/
              exit 1
         fi
 
         rm -f output_apk/*.keystore
+
         cd output_apk
         zip -r ../unsigned.apk .
         cd ..
@@ -87,22 +86,25 @@ jobs:
         $ZIPALIGN -v -p 4 unsigned.apk aligned.apk
 
         if [ -f base_apk/my_release.keystore ]; then
-            echo "Signing..."
+            echo "Signing with Keystore..."
+            
             $APKSIGNER sign \
               --ks base_apk/my_release.keystore \
               --ks-pass pass:123456 \
               --key-pass pass:123456 \
               --ks-key-alias mykey \
-              --out VGPU-r27c-LTO.apk \
+              --out VGPU-r27c.apk \
               aligned.apk
-            echo "SUCCESS: APK Created!"
+              
+            echo "SUCCESS: VGPU-r27c.apk file successfully created!"
         else
-            echo "ERROR: Keystore missing!"
+            echo "ERROR: File 'my_release.keystore' does not exist in base_apk folder!"
+            echo "Please upload the keystore first for permanent signature."
             exit 1
         fi
 
     - name: Upload Result
       uses: actions/upload-artifact@v4
       with:
-        name: VGPU-NextGen-APK
-        path: VGPU-r27c-LTO.apk
+        name: VGPU-r27c-APK
+        path: VGPU-r27c.apk
